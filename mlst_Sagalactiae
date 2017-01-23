@@ -1,0 +1,224 @@
+#!/bin/bash
+
+#define DBPATH
+DBPATH="./";
+
+usage(){
+    echo "AQUACEN (c) 2017 - version 0.5";
+    echo "Usage: $0 file [-nv]"
+    echo " file can be:"
+    echo " - fasta";
+    echo " - multi-fasta";
+    echo
+    echo "-nv parameter to disable verbose mode";
+    echo
+    echo "To create or updateDB run: $0 -makedb";
+    echo
+    exit 0;
+}
+
+createDB(){
+    wget "http://pubmlst.org/bigsdb?db=pubmlst_sagalactiae_seqdef&page=downloadAlleles&locus=adhP"
+    mv bigsdb\?db\=pubmlst_sagalactiae_seqdef\&page\=downloadAlleles\&locus\=adhP adhP.fasta
+    wget "http://pubmlst.org/bigsdb?db=pubmlst_sagalactiae_seqdef&page=downloadAlleles&locus=pheS"
+    mv bigsdb\?db\=pubmlst_sagalactiae_seqdef\&page\=downloadAlleles\&locus\=pheS pheS.fasta
+    wget "http://pubmlst.org/bigsdb?db=pubmlst_sagalactiae_seqdef&page=downloadAlleles&locus=atr"
+    mv bigsdb\?db\=pubmlst_sagalactiae_seqdef\&page\=downloadAlleles\&locus\=atr atr.fasta
+    wget "http://pubmlst.org/bigsdb?db=pubmlst_sagalactiae_seqdef&page=downloadAlleles&locus=glnA"
+    mv bigsdb\?db\=pubmlst_sagalactiae_seqdef\&page\=downloadAlleles\&locus\=glnA glnA.fasta
+    wget "http://pubmlst.org/bigsdb?db=pubmlst_sagalactiae_seqdef&page=downloadAlleles&locus=sdhA"
+    mv bigsdb\?db\=pubmlst_sagalactiae_seqdef\&page\=downloadAlleles\&locus\=sdhA sdhA.fasta
+    wget "http://pubmlst.org/bigsdb?db=pubmlst_sagalactiae_seqdef&page=downloadAlleles&locus=glcK"
+    mv bigsdb\?db\=pubmlst_sagalactiae_seqdef\&page\=downloadAlleles\&locus\=glcK glcK.fasta
+    wget "http://pubmlst.org/bigsdb?db=pubmlst_sagalactiae_seqdef&page=downloadAlleles&locus=tkt"
+    mv bigsdb\?db\=pubmlst_sagalactiae_seqdef\&page\=downloadAlleles\&locus\=tkt tkt.fasta
+    
+    wget "http://pubmlst.org/bigsdb?db=pubmlst_sagalactiae_seqdef&page=downloadProfiles&scheme_id=1"
+    mv bigsdb\?db\=pubmlst_sagalactiae_seqdef\&page\=downloadProfiles\&scheme_id\=1 mlst_profile
+    sed -i -- 's/\t/;/g' mlst_profile
+        
+    makeblastdb -dbtype nucl -in adhP.fasta
+    makeblastdb -dbtype nucl -in pheS.fasta
+    makeblastdb -dbtype nucl -in atr.fasta
+    makeblastdb -dbtype nucl -in glnA.fasta
+    makeblastdb -dbtype nucl -in sdhA.fasta
+    makeblastdb -dbtype nucl -in glcK.fasta
+    makeblastdb -dbtype nucl -in tkt.fasta
+    
+    exit 0;
+}
+
+[[ $# -lt 1 ]] && usage
+[[ "$1" == "-makedb" ]] && createDB
+
+VERBOSE="1";
+if [ "$2" == "-nv" ]; then
+    VERBOSE="0";
+fi
+
+FILE=$1
+[[ "$VERBOSE" == 1 ]] && echo $FILE;
+
+get_values(){
+    hit=`echo $1`
+    
+    sseqid="";
+    sstart="";
+    send="";
+    slen="";
+    length="";
+    pident="";
+    mismatch="";
+    gaps="";
+    evalue="";
+
+    for aux in $hit; do
+	if [ "$sseqid" == "" ]; then
+	    sseqid=$aux;
+	elif [ "$sstart" == "" ]; then
+	    sstart=$aux;
+	elif [ "$send" == "" ]; then
+	    send=$aux;
+	elif [ "$slen" == "" ]; then
+	    slen=$aux;
+	elif [ "$length" == "" ]; then
+	    length=$aux;
+	elif [ "$pident" == "" ]; then
+	    pident=$aux;
+	elif [ "$mismatch" == "" ]; then
+	    mismatch=$aux;
+	elif [ "$gaps" == "" ]; then
+	    gaps=$aux;
+	else
+	    evalue=$aux;
+	fi
+    done
+
+    eval "$2=$sseqid";
+    eval "$3=$sstart";
+    eval "$4=$send";
+    eval "$5=$slen";
+    eval "$6=$length";
+    eval "$7=$pident";
+    eval "$8=$mismatch";
+    eval "$9=$gaps";
+    eval "${10}=$evalue";
+}
+
+GENES="adhP pheS atr glnA sdhA glcK tkt"
+adhP="";
+pheS="";
+atr="";
+glnA="";
+sdhA="";
+glcK="";
+tkt="";
+
+n_adhP="";
+n_pheS="";
+n_atr="";
+n_glnA="";
+n_sdhA="";
+n_glcK="";
+n_tkt="";
+
+
+for I in $GENES; do
+    hit=`blastn -query $FILE -outfmt "6 sseqid sstart send slen length pident mismatch gaps evalue" -num_alignments 1 -db ${DBPATH}${I}.fasta`
+    if [ "$hit" == "" ]; then
+	if [ "$VERBOSE" == 1 ]; then
+	    echo "$I not found...";
+	fi
+    else
+	if [ "$VERBOSE" == 1 ]; then
+	    echo $hit
+	fi
+	sseqid="";
+	sstart="";
+	send="";
+	slen="";
+	length="";
+	pident="";
+	mismatch="";
+	gaps="";
+	evalue="";
+	
+	summary="";
+	
+	get_values "$hit" sseqid sstart send slen length pident mismatch gaps evalue
+	summary=$sseqid
+	erro="";
+	
+	if [ "$mismatch" != "0" ]; then
+	    erro="Mismatch found on $I ..."
+	    summary="$summary\t$erro";
+	fi
+	if [ "$gaps" != "0" ]; then
+	    erro="Gaps found on $I ..."
+	    summary="$summary\t$erro";
+	fi
+	if [ "$slen" != "$length" ]; then
+	    erro="Size of $I not match";
+	    summary="$summary\t$erro";
+	fi
+	
+	if [ "$I" == "adhP" ]; then
+	    adhP=$summary;
+	    if [ "$erro" == "" ]; then
+		n_adhP=${sseqid:5}
+	    fi
+	elif [ "$I" == "pheS" ]; then
+	    pheS=$summary;
+	    if [ "$erro" == "" ]; then
+		n_pheS=${sseqid:5}
+	    fi
+	elif [ "$I" == "atr" ]; then
+	    atr=$summary;
+	    if [ "$erro" == "" ]; then
+		n_atr=${sseqid:4}
+	    fi
+	elif [ "$I" == "glnA" ]; then
+	    glnA=$summary;
+	    if [ "$erro" == "" ]; then
+		n_glnA=${sseqid:5}
+	    fi
+	elif [ "$I" == "sdhA" ]; then
+	    sdhA=$summary;
+	    if [ "$erro" == "" ]; then
+		n_sdhA=${sseqid:5}
+	    fi
+	elif [ "$I" == "glcK" ]; then
+	    glcK=$summary;
+	    if [ "$erro" == "" ]; then
+		n_glcK=${sseqid:5}
+	    fi
+	elif [ "$I" == "tkt" ]; then
+	    tkt=$summary;
+	    if [ "$erro" == "" ]; then
+		n_tkt=${sseqid:4}
+	    fi
+	fi
+    fi
+done
+
+if [ "$VERBOSE" == 1 ]; then
+    echo 
+    echo -e $adhP
+    echo -e $pheS
+    echo -e $atr
+    echo -e $glnA
+    echo -e $sdhA
+    echo -e $glcK
+    echo -e $tkt
+else
+    echo -n $FILE
+    echo -ne "\t"
+fi
+
+if [ "$n_adhP" != "" ] && [ "$n_pheS" != "" ] && [ "$n_atr" != "" ] && [ "$n_glnA" != "" ] && [ "$n_sdhA" != "" ] && [ "$n_glcK" != "" ] && [ "$n_tkt" != "" ]; then
+    [[ "$VERBOSE" == 1 ]] && echo -n "ST: ";
+    ST=`cat ${DBPATH}mlst_profile |grep ";$n_adhP;$n_pheS;$n_atr;$n_glnA;$n_sdhA;$n_glcK;$n_tkt;"`
+    echo -n $ST;
+fi
+echo
+
